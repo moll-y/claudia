@@ -1,21 +1,23 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"syscall"
 )
 
 func main() {
-	// Set up channel on which to send signal notifications.
-	// We must use a buffered channel or risk missing the signal
-	// if we're not ready to receive when the signal is sent.
+	// Set up channel on which to send signal notifications. We must use a
+	// buffered channel or risk missing the signal if we're not ready to
+	// receive when the signal is sent.
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 
-	l, err := net.Listen("unix", "/tmp/test.sock")
+	l, err := net.Listen("unix", "/tmp/claudia.sock")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -30,8 +32,15 @@ func main() {
 		for {
 			conn, err := l.Accept()
 			if err != nil {
+				// This error "ErrClosed" is returned when the
+				// listener is closed during shutdownw. In this
+				// case we just call "return" to exit this
+				// goroutine.
+				if errors.Is(err, net.ErrClosed) {
+					return
+				}
 				log.Print(err)
-				return
+				continue
 			}
 
 			func() {
@@ -41,25 +50,39 @@ func main() {
 					}
 				}()
 
-				buf := make([]byte, 1024)
+				buf := make([]byte, 512)
 				n, err := conn.Read(buf)
 				if err != nil {
 					log.Print(err)
 					return
 				}
 
-				cmd, err := parse(buf[:n])
+				done, word, err := parse(buf[:n])
 				if err != nil {
 					log.Print(err)
 					return
 				}
 
-				fmt.Println(cmd)
+				// Waybar expects the exec-script to output its
+				// data in JSON format. This should look like
+				// this:
+				//   {
+				//     "alt": "$alt",
+				//     "text": "$text",
+				//     "class": "$class",
+				//     "tooltip": "$tooltip",
+				//     "percentage": $percentage
+				//   }
+				if done {
+					fmt.Printf("{\"text\":\"π %c\",\"class\":\"done\"}\n", word[0])
+				} else {
+					fmt.Printf("{\"text\":\"π %c\"}\n", word[0])
+				}
 			}()
 		}
 	}()
 
+	fmt.Println("{\"text\":\"π I\"}")
 	// Block until any signal is received.
-	// And then, clean up.
-	<-c
+	log.Println("claudia: ", <-c)
 }
