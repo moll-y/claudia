@@ -48,6 +48,8 @@ func parse(buf []byte) (bool, string, error) {
 
 func extract(buf, target []byte) (string, error) {
 	i := bytes.Index(buf, target)
+
+	// i + 2 = we are retrieving two bytes after "i".
 	if i < 0 || len(buf)-(i+2) < len(target) {
 		return "", errors.New("index out of bounds")
 	}
