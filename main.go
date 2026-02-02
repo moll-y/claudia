@@ -11,13 +11,15 @@ import (
 )
 
 func main() {
+	log.SetPrefix("claudia: ")
 	// Set up channel on which to send signal notifications. We must use a
 	// buffered channel or risk missing the signal if we're not ready to
 	// receive when the signal is sent.
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 
-	l, err := net.Listen("unix", "/tmp/claudia.sock")
+	address := "/tmp/claudia.sock"
+	l, err := net.Listen("unix", address)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -82,7 +84,8 @@ func main() {
 		}
 	}()
 
+	log.Printf("listening to socket: %s", address)
 	fmt.Println("{\"text\":\"π I\"}")
 	// Block until any signal is received.
-	log.Println("claudia: ", <-c)
+	log.Print(<-c)
 }
